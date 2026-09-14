@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Mini Tennis Tourney</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    :root {
+      --surface-color: #ffffff;
+      --surface-light: #f0fdf4;
+      --primary-color: #166534;
+      --primary-hover: #15803d;
+      --text-primary: #1f2937;
+      --text-secondary: #4b5563;
+      --danger-color: #ef4444;
+      --success-color: #22c55e;
+      --border-radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+
+    body {
+      background-color: #4ade80;
+      background-image: 
+        linear-gradient(rgba(255,255,255,0.4) 2px, transparent 2px),
+        linear-gradient(90deg, rgba(255,255,255,0.4) 2px, transparent 2px),
+        linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+      background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+      background-position: -2px -2px, -2px -2px, -1px -1px, -1px -1px;
+      background-attachment: fixed;
+      color: var(--text-primary);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Extreme contrast mode */
+    body.extreme-contrast {
+      background: #ffffff !important;
+      color: #000000 !important;
+    }
+    body.extreme-contrast .card {
+      background: #fff;
+      border: 4px solid #000;
+      box-shadow: none;
+    }
+    body.extreme-contrast button, body.extreme-contrast th {
+      background: #000 !important;
+      color: #fff !important;
+      font-weight: 900;
+      border: 2px solid #000;
+    }
+    body.extreme-contrast .text-secondary {
+      color: #333 !important;
+      font-weight: bold;
+    }
+    body.extreme-contrast input {
+      border: 3px solid #000 !important;
+      color: #000 !important;
+      font-weight: 900;
+    }
+    body.extreme-contrast .bottom-nav {
+      background: #000;
+      border-top: 4px solid #000;
+    }
+    body.extreme-contrast .nav-item {
+      color: #aaa;
+    }
+    body.extreme-contrast .nav-item.active {
+      color: #fff;
+    }
+
+    #app-container {
+      max-width: 600px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding-bottom: 80px;
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(4px);
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+    body.extreme-contrast #app-container {
+      background: none;
+      backdrop-filter: none;
+      box-shadow: none;
+    }
+
+    .container { padding: 24px; flex: 1; }
+    h2 { text-align: center; color: var(--primary-color); margin-bottom: 16px; text-transform: uppercase; }
+    body.extreme-contrast h2 { color: #000; }
+
+    .card {
+      background: var(--surface-color);
+      padding: 16px;
+      border-radius: var(--border-radius);
+      margin-bottom: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    
+    .next-match {
+      border: 3px solid #eab308;
+      box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);
+      position: relative;
+    }
+    .next-match::before {
+      content: 'Prossima!';
+      position: absolute;
+      top: -12px;
+      left: 16px;
+      background: #eab308;
+      color: #000;
+      font-weight: bold;
+      font-size: 0.8rem;
+      padding: 2px 8px;
+      border-radius: 8px;
+    }
+
+    input, select {
+      padding: 12px;
+      border: 2px solid #d1d5db;
+      border-radius: var(--border-radius);
+      font-size: 1rem;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+    input:focus { border-color: var(--primary-color); outline: none; }
+    .score-input { font-size: 1.5rem; text-align: center; width: 80px; height: 60px; font-weight: bold; color: var(--primary-color); }
+
+    button {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      padding: 16px;
+      border-radius: var(--border-radius);
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      box-shadow: 0 4px 6px rgba(22, 101, 52, 0.2);
+    }
+    button:active { transform: translateY(2px); }
+    button:disabled { background: #d1d5db; color: #9ca3af; cursor: not-allowed; }
+    .btn-danger { background: var(--danger-color); }
+    .btn-secondary { background: var(--surface-light); color: var(--primary-color); border: 1px solid var(--primary-color); }
+    .btn-small { padding: 8px; font-size: 0.9rem; width: auto; }
+
+    .flex { display: flex; }
+    .justify-between { justify-content: space-between; }
+    .items-center { align-items: center; }
+    .gap-2 { gap: 8px; }
+    .mb-2 { margin-bottom: 8px; }
+    .mb-4 { margin-bottom: 16px; }
+    .text-center { text-align: center; }
+    .text-secondary { color: var(--text-secondary); }
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      background: var(--surface-color);
+      display: flex;
+      justify-content: space-around;
+      padding: 10px 0;
+      border-top: 1px solid #e5e7eb;
+      z-index: 100;
+    }
+    .nav-item {
+      background: transparent; color: var(--text-secondary); font-size: 0.8rem;
+      padding: 8px; box-shadow: none; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .nav-item.active { color: var(--primary-color); font-weight: bold; }
+
+    table { width: 100%; border-collapse: collapse; background: white; border-radius: var(--border-radius); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    th, td { padding: 12px 6px; text-align: center; border-bottom: 1px solid #f3f4f6; }
+    th { background: var(--primary-color); color: white; font-size: 0.85rem; }
+    td:first-child, th:first-child { text-align: left; padding-left: 12px; }
+    tr:first-child td { font-weight: bold; background: var(--surface-light); color: var(--primary-color); }
+    
+    .hidden { display: none !important; }
+    .header-bar { display: flex; justify-content: space-between; padding: 10px; background: rgba(0,0,0,0.05); }
+    
+    /* Dialog Overlay */
+    .overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000;
+      display: flex; justify-content: center; align-items: center;
+    }
+    .dialog { background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; }
+    body.extreme-contrast .dialog { border: 4px solid #000; }
+  </style>
+</head>
+<body>
+
+<div id="app-container">
+  <div class="header-bar">
+    <button class="btn-small btn-secondary" onclick="app.toggleContrast()" style="width:auto">☀️ Contrasto</button>
+    <div style="display:flex; gap:8px">
+      <button class="btn-small btn-secondary" onclick="app.exportData()" style="width:auto" id="btnExport">⬇️ Export</button>
+      <button class="btn-small btn-secondary" onclick="document.getElementById('importFile').click()" style="width:auto" id="btnImport">⬆️ Import</button>
+      <input type="file" id="importFile" class="hidden" accept=".json" onchange="app.importData(event)">
+      <button class="btn-small btn-danger" onclick="app.resetData()" style="width:auto" id="btnReset">🔄 Nuovo</button>
+    </div>
+  </div>
+
+  <div id="view-setup" class="container view">
+    <h2>Setup Giocatori</h2>
+    <p class="text-secondary mb-4">Aggiungi da 3 a 8 amici per creare il girone all'italiana.</p>
+    <form onsubmit="app.addPlayer(event)" class="flex gap-2 mb-4">
+      <input type="text" id="playerName" placeholder="Nome giocatore..." maxlength="15" required autocomplete="off">
+      <button type="submit" style="width:auto; padding:0 24px;">Add</button>
+    </form>
+    <div id="playersList" class="mb-4"></div>
+    
+    <label class="flex items-center mb-4 gap-2" style="font-weight:bold; cursor:pointer">
+      <input type="checkbox" id="doubleRound" style="width:24px; height:24px; margin:0">
+      Girone Andata e Ritorno
+    </label>
+
+    <button onclick="app.generateTournament()" id="btnGenerate">Genera Calendario</button>
+  </div>
+
+  <div id="view-matches" class="container view hidden" style="padding-bottom:100px;">
+    <h2>Calendario Partite</h2>
+    <div id="matchesContainer"></div>
+  </div>
+
+  <div id="view-standings" class="container view hidden">
+    <h2>Classifica</h2>
+    <div style="overflow-x:auto" id="standingsContainer"></div>
+    <div class="text-secondary mt-4" style="font-size:0.8rem; margin-top:16px;">
+      <strong>Criteri:</strong> 1. Vittorie, 2. Scontro Diretto (solo se parità a 2 e match giocato), 3. Diff. Punti (PF-PS), 4. Punti Fatti, 5. Alfabetico.<br>
+      <em>I "Bye" (riposi) non contano come partite giocate.</em>
+    </div>
+    <button class="mt-4 mb-4" onclick="app.shareStandings()" style="margin-top:24px" id="btnShare">📤 Condividi Classifica</button>
+  </div>
+
+  <div id="view-history" class="container view hidden">
+    <h2>Storico & Stats</h2>
+    <div class="card" id="statsContainer"></div>
+    <h3 style="margin:24px 0 16px;">Archivio Tornei</h3>
+    <div id="historyContainer"></div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-item active" onclick="app.switchTab('setup')" id="tab-setup"><span>⚙️</span>Setup</button>
+    <button class="nav-item" onclick="app.switchTab('matches')" id="tab-matches"><span>🎾</span>Partite</button>
+    <button class="nav-item" onclick="app.switchTab('standings')" id="tab-standings"><span>🏆</span>Classifica</button>
+    <button class="nav-item" onclick="app.switchTab('history')" id="tab-history"><span>📜</span>Storico</button>
+  </div>
+</div>
+
+<div id="dialogOverlay" class="overlay hidden">
+  <div class="dialog">
+    <h3 id="dialogTitle" class="mb-4">Conferma</h3>
+    <p id="dialogMsg" class="mb-4"></p>
+    <div class="flex gap-2">
+      <button class="btn-secondary" onclick="app.closeDialog()">Annulla</button>
+      <button class="btn-danger" id="dialogConfirm">Conferma</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// PWA Registration
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(err => console.log('SW setup failed', err));
+}
+
+const SCHEMA_VERSION = 2;
+const STORAGE_KEY = 'minitennis_data';
+
+class App {
+  constructor() {
+    this.state = this.loadState();
+    this.applyTheme();
+    this.render();
+  }
+
+  loadState() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.schemaVersion !== SCHEMA_VERSION) {
+          alert("I dati salvati appartengono a una versione precedente e incompatibile. Verranno resettati.");
+          return this.defaultState();
+        }
+        return parsed;
+      }
+    } catch (e) { console.error("Parse error", e); }
+    return this.defaultState();
+  }
+
+  saveState() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+  }
+
+  defaultState() {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      players: [],
+      matches: [],
+      history: [],
+      contrastMode: false,
+      isTournamentActive: false
+    };
+  }
+
+  applyTheme() {
+    if (this.state.contrastMode) document.body.classList.add('extreme-contrast');
+    else document.body.classList.remove('extreme-contrast');
+  }
+
+  toggleContrast() {
+    this.state.contrastMode = !this.state.contrastMode;
+    this.applyTheme();
+    this.saveState();
+  }
+
+  vibrate() {
+    if (navigator.vibrate) navigator.vibrate(50);
+  }
+
+  // Dialog System
+  showDialog(title, msg, onConfirm) {
+    document.getElementById('dialogTitle').innerText = title;
+    document.getElementById('dialogMsg').innerText = msg;
+    const btn = document.getElementById('dialogConfirm');
+    btn.onclick = () => { onConfirm(); this.closeDialog(); };
+    document.getElementById('dialogOverlay').classList.remove('hidden');
+  }
+  closeDialog() {
+    document.getElementById('dialogOverlay').classList.add('hidden');
+  }
+
+  switchTab(tabId) {
+    document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+    document.querySelectorAll('.nav-item').forEach(v => v.classList.remove('active'));
+    document.getElementById(`view-${tabId}`).classList.remove('hidden');
+    document.getElementById(`tab-${tabId}`).classList.add('active');
+    this.render();
+  }
+
+  // Setup
+  addPlayer(e) {
+    e.preventDefault();
+    const input = document.getElementById('playerName');
+    const name = input.value.trim();
+    if (name && !this.state.players.includes(name)) {
+      if (this.state.players.length < 8) {
+        this.state.players.push(name);
+        input.value = '';
+        this.saveState();
+        this.renderSetup();
+      } else alert("Massimo 8 giocatori!");
+    } else alert("Nome vuoto o già presente!");
+  }
+
+  removePlayer(name) {
+    this.state.players = this.state.players.filter(p => p !== name);
+    this.saveState();
+    this.renderSetup();
+  }
+
+  // Polygon Algorithm for Round Robin (handles Bye automatically if odd)
+  generateTournament() {
+    const p = this.state.players;
+    if (p.length < 3 || p.length > 8) return alert("Servono tra 3 e 8 giocatori!");
+    
+    this.showDialog("Genera Torneo", "Sei sicuro? Non potrai aggiungere o rimuovere giocatori dopo.", () => {
+      let players = [...p];
+      let hasBye = false;
+      if (players.length % 2 !== 0) {
+        players.push("BYE");
+        hasBye = true;
+      }
+
+      const numRounds = players.length - 1;
+      const matchesPerRound = players.length / 2;
+      let generatedMatches = [];
+      let matchId = 1;
+
+      for (let r = 0; r < numRounds; r++) {
+        for (let i = 0; i < matchesPerRound; i++) {
+          const p1 = players[i];
+          const p2 = players[players.length - 1 - i];
+          
+          if (p1 !== "BYE" && p2 !== "BYE") {
+            generatedMatches.push({
+              id: matchId++,
+              round: r + 1,
+              player1: p1,
+              player2: p2,
+              score1: 0,
+              score2: 0,
+              played: false
+            });
+          }
+        }
+        // Rotate (keep index 0 fixed)
+        players.splice(1, 0, players.pop());
+      }
+
+      if (document.getElementById('doubleRound').checked) {
+        const returnMatches = generatedMatches.map(m => ({
+          ...m,
+          id: matchId++,
+          round: m.round + numRounds,
+          player1: m.player2,
+          player2: m.player1,
+          score1: 0,
+          score2: 0,
+          played: false
+        }));
+        generatedMatches = generatedMatches.concat(returnMatches);
+      }
+
+      this.state.matches = generatedMatches;
+      this.state.isTournamentActive = true;
+      this.saveState();
+      this.switchTab('matches');
+    });
+  }
+
+  saveMatch(id, s1, s2) {
+    if (s1 === s2) return alert("Nessun pareggio consentito (tie-break)!");
+    if (Math.max(s1, s2) < 10) return alert("Il vincitore deve raggiungere almeno 10 punti!");
+    
+    const match = this.state.matches.find(m => m.id === id);
+    if (match.played) {
+      this.showDialog("Attenzione", `Questa partita ha già un risultato (${match.score1}-${match.score2}). Vuoi sovrascriverlo?`, () => {
+        this.commitMatchScore(match, s1, s2);
+      });
+    } else {
+      this.commitMatchScore(match, s1, s2);
+    }
+  }
+
+  commitMatchScore(match, s1, s2) {
+    match.score1 = s1;
+    match.score2 = s2;
+    match.played = true;
+    match.timestamp = Date.now();
+    this.saveState();
+    this.vibrate();
+    this.renderMatches();
+  }
+
+  // Calculate Standings with strict tiebreakers
+  getStandings() {
+    let stats = this.state.players.map(name => ({
+      name, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, diff: 0, played: 0
+    }));
+
+    this.state.matches.filter(m => m.played).forEach(m => {
+      const p1 = stats.find(s => s.name === m.player1);
+      const p2 = stats.find(s => s.name === m.player2);
+      p1.played++; p2.played++;
+      p1.pointsFor += m.score1; p1.pointsAgainst += m.score2;
+      p2.pointsFor += m.score2; p2.pointsAgainst += m.score1;
+      
+      if (m.score1 > m.score2) { p1.wins++; p2.losses++; }
+      else { p2.wins++; p1.losses++; }
+    });
+
+    stats.forEach(s => s.diff = s.pointsFor - s.pointsAgainst);
+
+    // Sort function
+    stats.sort((a, b) => {
+      if (b.wins !== a.wins) return b.wins - a.wins; // 1. Wins
+      
+      // Check head-to-head ONLY if exactly 2 players are tied with this win count
+      // This is a global sort, so we check if a and b are the ONLY ones with this win count.
+      // Actually, a simpler standard approach for H2H during sort:
+      // Since it's a pairwise sort, H2H is valid if they played. But strict rules say:
+      // "Scontro diretto (solo se la parità coinvolge esattamente 2 giocatori)".
+      // Let's count how many have a.wins
+      const tiedCount = stats.filter(s => s.wins === a.wins).length;
+      if (tiedCount === 2) {
+        // Find H2H
+        let aWinsH2H = 0; let bWinsH2H = 0;
+        this.state.matches.filter(m => m.played).forEach(m => {
+          if (m.player1 === a.name && m.player2 === b.name) {
+             if (m.score1 > m.score2) aWinsH2H++; else bWinsH2H++;
+          }
+          if (m.player2 === a.name && m.player1 === b.name) {
+             if (m.score2 > m.score1) aWinsH2H++; else bWinsH2H++;
+          }
+        });
+        if (aWinsH2H !== bWinsH2H) return bWinsH2H - aWinsH2H;
+      }
+      
+      if (b.diff !== a.diff) return b.diff - a.diff; // 3. Diff
+      if (b.pointsFor !== a.pointsFor) return b.pointsFor - a.pointsFor; // 4. Points For
+      return a.name.localeCompare(b.name); // 5. Alphabetical
+    });
+
+    return stats;
+  }
+
+  shareStandings() {
+    const s = this.getStandings();
+    let text = "🏆 Classifica Torneo Mini Tennis:\n\n";
+    s.forEach((p, i) => {
+      text += `${i+1}. ${p.name} - ${p.wins}V (Diff: ${p.diff > 0 ? '+'+p.diff : p.diff})\n`;
+    });
+    
+    if (navigator.share) {
+      navigator.share({ title: 'Classifica Torneo', text }).catch(e => console.log(e));
+    } else {
+      navigator.clipboard.writeText(text);
+      alert("Classifica copiata negli appunti!");
+    }
+  }
+
+  resetData() {
+    if (!this.state.isTournamentActive) return;
+    
+    this.showDialog("Nuovo Torneo", "Vuoi terminare il torneo corrente? Se ci sono partite giocate, verrà archiviato.", () => {
+      const playedMatches = this.state.matches.filter(m => m.played).length;
+      if (playedMatches > 0) {
+        this.state.history.push({
+          id: Date.now(),
+          date: new Date().toLocaleDateString(),
+          standings: this.getStandings(),
+          matchesCount: playedMatches
+        });
+      }
+      this.state.matches = [];
+      this.state.players = [];
+      this.state.isTournamentActive = false;
+      this.saveState();
+      this.switchTab('setup');
+    });
+  }
+
+  exportData() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.state));
+    const dl = document.createElement('a');
+    dl.setAttribute("href", dataStr);
+    dl.setAttribute("download", `torneo_backup_${Date.now()}.json`);
+    dl.click();
+  }
+
+  importData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target.result);
+        if (parsed.schemaVersion !== SCHEMA_VERSION) throw new Error("Versione incompatibile");
+        this.showDialog("Importa", "Sei sicuro di voler sovrascrivere il torneo attuale?", () => {
+          this.state = parsed;
+          this.saveState();
+          this.render();
+        });
+      } catch (err) {
+        alert("Errore nell'importazione: file non valido o incompatibile.");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
+  // Renderers
+  render() {
+    this.renderSetup();
+    this.renderMatches();
+    this.renderStandings();
+    this.renderHistory();
+  }
+
+  renderSetup() {
+    const list = document.getElementById('playersList');
+    list.innerHTML = this.state.players.map(p => `
+      <div class="card flex justify-between items-center mb-2" style="padding:10px 16px;">
+        <span style="font-weight:bold">${p}</span>
+        <button class="btn-danger btn-small" onclick="app.removePlayer('${p}')">X</button>
+      </div>
+    `).join('');
+    
+    document.getElementById('btnGenerate').disabled = this.state.players.length < 3 || this.state.players.length > 8 || this.state.isTournamentActive;
+    if (this.state.isTournamentActive) {
+      document.getElementById('btnGenerate').innerText = "Torneo in corso (resetta per nuovo)";
+    } else {
+      document.getElementById('btnGenerate').innerText = "Genera Calendario";
+    }
+  }
+
+  renderMatches() {
+    const container = document.getElementById('matchesContainer');
+    if (!this.state.matches || this.state.matches.length === 0) {
+      container.innerHTML = '<p class="text-center text-secondary">Nessun calendario generato.</p>';
+      return;
+    }
+
+    let nextFound = false;
+
+    container.innerHTML = this.state.matches.map(m => {
+      let extraClass = '';
+      if (!m.played && !nextFound) {
+        extraClass = 'next-match';
+        nextFound = true;
+      }
+      return `
+      <div class="card ${extraClass}">
+        <div class="flex justify-between items-center mb-4" style="font-weight:bold; font-size:1.1rem">
+          <span class="${m.played && m.score1 > m.score2 ? 'text-primary' : ''}">${m.player1}</span>
+          <span class="text-secondary" style="font-size:0.9rem">VS</span>
+          <span class="${m.played && m.score2 > m.score1 ? 'text-primary' : ''}">${m.player2}</span>
+        </div>
+        <div class="flex justify-between items-center gap-2 mb-4">
+          <input type="number" id="s1_${m.id}" class="score-input" value="${m.score1}">
+          <span>-</span>
+          <input type="number" id="s2_${m.id}" class="score-input" value="${m.score2}">
+        </div>
+        <button class="${m.played ? 'btn-secondary' : ''}" 
+                onclick="app.saveMatch(${m.id}, parseInt(document.getElementById('s1_${m.id}').value)||0, parseInt(document.getElementById('s2_${m.id}').value)||0)">
+          ${m.played ? 'Modifica Risultato' : 'Salva Risultato'}
+        </button>
+      </div>
+    `}).join('');
+  }
+
+  renderStandings() {
+    const container = document.getElementById('standingsContainer');
+    if (!this.state.isTournamentActive) {
+      container.innerHTML = '<p class="text-center text-secondary">Nessun torneo in corso.</p>';
+      return;
+    }
+
+    const s = this.getStandings();
+    container.innerHTML = `
+      <table>
+        <tr><th>Giocatore</th><th>PG</th><th>V</th><th>PF</th><th>PS</th><th>DP</th></tr>
+        ${s.map((p, i) => `
+          <tr>
+            <td>${i+1}. ${p.name}</td>
+            <td>${p.played}</td>
+            <td><strong>${p.wins}</strong></td>
+            <td>${p.pointsFor}</td>
+            <td>${p.pointsAgainst}</td>
+            <td style="color:${p.diff>0?'var(--success-color)':(p.diff<0?'var(--danger-color)':'inherit')}">
+              ${p.diff > 0 ? '+'+p.diff : p.diff}
+            </td>
+          </tr>
+        `).join('')}
+      </table>
+    `;
+  }
+
+  renderHistory() {
+    const statsContainer = document.getElementById('statsContainer');
+    const histContainer = document.getElementById('historyContainer');
+    
+    if (this.state.history.length === 0) {
+      statsContainer.innerHTML = '<p class="text-center text-secondary">Gioca e archivia tornei per vedere le statistiche globali!</p>';
+      histContainer.innerHTML = '';
+      return;
+    }
+
+    // Calc stats
+    let totalWins = {};
+    let tournamentWins = {};
+    this.state.history.forEach(t => {
+      const winner = t.standings[0].name;
+      tournamentWins[winner] = (tournamentWins[winner] || 0) + 1;
+      
+      t.standings.forEach(s => {
+        totalWins[s.name] = (totalWins[s.name] || 0) + s.wins;
+      });
+    });
+
+    const bestWinner = Object.keys(tournamentWins).sort((a,b)=>tournamentWins[b]-tournamentWins[a])[0];
+    const bestMatches = Object.keys(totalWins).sort((a,b)=>totalWins[b]-totalWins[a])[0];
+
+    statsContainer.innerHTML = `
+      <h3 class="mb-2">Statistiche Globali</h3>
+      <p>🏅 Maggior numero di tornei vinti: <strong>${bestWinner}</strong> (${tournamentWins[bestWinner]})</p>
+      <p>🎾 Maggior numero di singole vittorie: <strong>${bestMatches}</strong> (${totalWins[bestMatches]})</p>
+      <p>📜 Tornei archiviati: <strong>${this.state.history.length}</strong></p>
+    `;
+
+    histContainer.innerHTML = this.state.history.sort((a,b)=>b.id-a.id).map(t => {
+      const w = t.standings[0];
+      return `
+      <div class="card">
+        <div class="flex justify-between" style="border-bottom:1px solid #eee; padding-bottom:8px; margin-bottom:8px;">
+          <span>Data: ${t.date}</span>
+          <span class="text-secondary">${t.matchesCount} partite</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span style="font-size:1.2rem">🏆 <strong style="color:var(--primary-color)">${w.name}</strong></span>
+          <span class="text-secondary">${w.wins} V (Diff: ${w.diff>0?'+'+w.diff:w.diff})</span>
+        </div>
+        ${t.standings.length > 1 ? `<p style="font-size:0.8rem; margin-top:8px; color:#666">Podio: 2° ${t.standings[1]?.name} | 3° ${t.standings[2]?.name || ''}</p>` : ''}
+      </div>
+    `}).join('');
+  }
+}
+
+const app = new App();
+</script>
+</body>
+</html>
