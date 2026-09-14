@@ -21,14 +21,10 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
 
     body {
-      background-color: #4ade80;
-      background-image: 
-        linear-gradient(rgba(255,255,255,0.4) 2px, transparent 2px),
-        linear-gradient(90deg, rgba(255,255,255,0.4) 2px, transparent 2px),
-        linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
-      background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
-      background-position: -2px -2px, -2px -2px, -1px -1px, -1px -1px;
+      background-color: #1a202c;
+      background-image: url('tennis_bg.jpg');
+      background-size: cover;
+      background-position: center;
       background-attachment: fixed;
       color: var(--text-primary);
       min-height: 100vh;
@@ -76,9 +72,10 @@
       margin: 0 auto;
       min-height: 100vh;
       padding-bottom: 80px;
-      background: rgba(255, 255, 255, 0.85);
-      backdrop-filter: blur(4px);
-      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      background: rgba(0, 0, 0, 0.4);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 0 30px rgba(0,0,0,0.3);
       display: flex;
       flex-direction: column;
     }
@@ -93,11 +90,14 @@
     body.extreme-contrast h2 { color: #000; }
 
     .card {
-      background: var(--surface-color);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       padding: 16px;
       border-radius: var(--border-radius);
       margin-bottom: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      border: 1px solid rgba(255,255,255,0.4);
     }
     
     .next-match {
@@ -148,6 +148,7 @@
     .btn-small { padding: 8px; font-size: 0.9rem; width: auto; }
 
     .flex { display: flex; }
+    .flex-col { display: flex; flex-direction: column; }
     .justify-between { justify-content: space-between; }
     .items-center { align-items: center; }
     .gap-2 { gap: 8px; }
@@ -217,6 +218,7 @@
       <input type="text" id="playerName" placeholder="Nome giocatore..." maxlength="15" required autocomplete="off">
       <button type="submit" style="width:auto; padding:0 24px;">Add</button>
     </form>
+    <div id="knownPlayersList" class="flex gap-2 mb-4" style="flex-wrap: wrap;"></div>
     <div id="playersList" class="mb-4"></div>
     
     <label class="flex items-center mb-4 gap-2" style="font-weight:bold; cursor:pointer">
@@ -229,6 +231,9 @@
 
   <div id="view-matches" class="container view hidden" style="padding-bottom:100px;">
     <h2>Calendario Partite</h2>
+    <div class="mb-4">
+      <select id="matchSelector" onchange="app.renderMatches()"></select>
+    </div>
     <div id="matchesContainer"></div>
   </div>
 
@@ -293,6 +298,7 @@ class App {
           alert("I dati salvati appartengono a una versione precedente e incompatibile. Verranno resettati.");
           return this.defaultState();
         }
+        if (!parsed.knownPlayers) parsed.knownPlayers = [];
         return parsed;
       }
     } catch (e) { console.error("Parse error", e); }
@@ -307,6 +313,7 @@ class App {
     return {
       schemaVersion: SCHEMA_VERSION,
       players: [],
+      knownPlayers: [],
       matches: [],
       history: [],
       contrastMode: false,
@@ -353,21 +360,38 @@ class App {
   addPlayer(e) {
     e.preventDefault();
     const input = document.getElementById('playerName');
-    const name = input.value.trim();
+    this.addPlayerName(input.value);
+    input.value = '';
+  }
+
+  addPlayerName(name) {
+    name = name.trim();
     if (name && !this.state.players.includes(name)) {
       if (this.state.players.length < 8) {
         this.state.players.push(name);
-        input.value = '';
+        if (!this.state.knownPlayers.includes(name)) {
+          this.state.knownPlayers.push(name);
+        }
         this.saveState();
         this.renderSetup();
       } else alert("Massimo 8 giocatori!");
-    } else alert("Nome vuoto o già presente!");
+    } else if (!name) {
+      alert("Nome vuoto!");
+    }
   }
 
   removePlayer(name) {
     this.state.players = this.state.players.filter(p => p !== name);
     this.saveState();
     this.renderSetup();
+  }
+
+  removeKnownPlayer(name) {
+    this.showDialog("Elimina Rubrica", `Vuoi eliminare ${name} dai giocatori frequenti?`, () => {
+      this.state.knownPlayers = this.state.knownPlayers.filter(p => p !== name);
+      this.saveState();
+      this.renderSetup();
+    });
   }
 
   // Polygon Algorithm for Round Robin (handles Bye automatically if odd)
@@ -401,6 +425,8 @@ class App {
               player2: p2,
               score1: 0,
               score2: 0,
+              foul1: 0,
+              foul2: 0,
               played: false
             });
           }
@@ -418,6 +444,8 @@ class App {
           player2: m.player1,
           score1: 0,
           score2: 0,
+          foul1: 0,
+          foul2: 0,
           played: false
         }));
         generatedMatches = generatedMatches.concat(returnMatches);
@@ -430,11 +458,13 @@ class App {
     });
   }
 
-  saveMatch(id, s1, s2) {
+  saveMatch(id) {
+    const match = this.state.matches.find(m => m.id === id);
+    const s1 = match.score1;
+    const s2 = match.score2;
     if (s1 === s2) return alert("Nessun pareggio consentito (tie-break)!");
     if (Math.max(s1, s2) < 10) return alert("Il vincitore deve raggiungere almeno 10 punti!");
     
-    const match = this.state.matches.find(m => m.id === id);
     if (match.played) {
       this.showDialog("Attenzione", `Questa partita ha già un risultato (${match.score1}-${match.score2}). Vuoi sovrascriverlo?`, () => {
         this.commitMatchScore(match, s1, s2);
@@ -451,13 +481,18 @@ class App {
     match.timestamp = Date.now();
     this.saveState();
     this.vibrate();
+    
+    const nextMatch = this.state.matches.find(m => !m.played);
+    if (nextMatch) {
+      document.getElementById('matchSelector').value = nextMatch.id;
+    }
     this.renderMatches();
   }
 
   // Calculate Standings with strict tiebreakers
   getStandings() {
     let stats = this.state.players.map(name => ({
-      name, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, diff: 0, played: 0
+      name, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, diff: 0, played: 0, fouls: 0
     }));
 
     this.state.matches.filter(m => m.played).forEach(m => {
@@ -466,6 +501,7 @@ class App {
       p1.played++; p2.played++;
       p1.pointsFor += m.score1; p1.pointsAgainst += m.score2;
       p2.pointsFor += m.score2; p2.pointsAgainst += m.score1;
+      p1.fouls += (m.foul1 || 0); p2.fouls += (m.foul2 || 0);
       
       if (m.score1 > m.score2) { p1.wins++; p2.losses++; }
       else { p2.wins++; p1.losses++; }
@@ -587,6 +623,15 @@ class App {
         <button class="btn-danger btn-small" onclick="app.removePlayer('${p}')">X</button>
       </div>
     `).join('');
+
+    const knownList = document.getElementById('knownPlayersList');
+    const availableKnown = this.state.knownPlayers.filter(p => !this.state.players.includes(p));
+    knownList.innerHTML = availableKnown.map(p => `
+      <div style="display:flex; align-items:center; background:var(--surface-color); border-radius:16px; padding:4px 12px; border:1px solid var(--primary-color);">
+        <span style="cursor:pointer; font-weight:bold; color:var(--primary-color);" onclick="app.addPlayerName('${p}')">+ ${p}</span>
+        <span style="cursor:pointer; color:var(--danger-color); margin-left:8px; font-size:0.9rem; font-weight:bold;" onclick="app.removeKnownPlayer('${p}')">✕</span>
+      </div>
+    `).join('');
     
     document.getElementById('btnGenerate').disabled = this.state.players.length < 3 || this.state.players.length > 8 || this.state.isTournamentActive;
     if (this.state.isTournamentActive) {
@@ -598,37 +643,94 @@ class App {
 
   renderMatches() {
     const container = document.getElementById('matchesContainer');
+    const selector = document.getElementById('matchSelector');
+    
     if (!this.state.matches || this.state.matches.length === 0) {
       container.innerHTML = '<p class="text-center text-secondary">Nessun calendario generato.</p>';
+      selector.classList.add('hidden');
       return;
     }
+    
+    selector.classList.remove('hidden');
 
-    let nextFound = false;
+    let selectedId = parseInt(selector.value);
+    if (!selectedId || !this.state.matches.find(m => m.id === selectedId)) {
+      const nextMatch = this.state.matches.find(m => !m.played);
+      selectedId = nextMatch ? nextMatch.id : this.state.matches[0].id;
+    }
 
-    container.innerHTML = this.state.matches.map(m => {
-      let extraClass = '';
-      if (!m.played && !nextFound) {
-        extraClass = 'next-match';
-        nextFound = true;
-      }
-      return `
-      <div class="card ${extraClass}">
+    selector.innerHTML = this.state.matches.map(m => `
+      <option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>
+        ${m.played ? '✅' : '⏳'} ${m.player1} vs ${m.player2}
+      </option>
+    `).join('');
+    selector.value = selectedId;
+
+    const m = this.state.matches.find(x => x.id === selectedId);
+
+    container.innerHTML = `
+      <div class="card ${!m.played ? 'next-match' : ''}">
         <div class="flex justify-between items-center mb-4" style="font-weight:bold; font-size:1.1rem">
           <span class="${m.played && m.score1 > m.score2 ? 'text-primary' : ''}">${m.player1}</span>
           <span class="text-secondary" style="font-size:0.9rem">VS</span>
           <span class="${m.played && m.score2 > m.score1 ? 'text-primary' : ''}">${m.player2}</span>
         </div>
-        <div class="flex justify-between items-center gap-2 mb-4">
-          <input type="number" id="s1_${m.id}" class="score-input" value="${m.score1}">
-          <span>-</span>
-          <input type="number" id="s2_${m.id}" class="score-input" value="${m.score2}">
+        <div class="flex justify-between items-center gap-2 mb-2">
+          <div class="flex-col items-center gap-2">
+            <button class="btn-small" onclick="app.updateScore(${m.id}, 1, 1)">+</button>
+            <input type="number" id="s1_${m.id}" class="score-input" value="${m.score1}" onchange="app.setScore(${m.id}, 1, this.value)">
+            <button class="btn-small btn-secondary" onclick="app.updateScore(${m.id}, 1, -1)">-</button>
+            <button class="btn-small btn-danger mt-2" style="margin-top:8px;" onclick="app.addFoul(${m.id}, 1)">⚠️ Fallo (${m.foul1 || 0})</button>
+          </div>
+          <span style="font-size:2rem; font-weight:bold;">-</span>
+          <div class="flex-col items-center gap-2">
+            <button class="btn-small" onclick="app.updateScore(${m.id}, 2, 1)">+</button>
+            <input type="number" id="s2_${m.id}" class="score-input" value="${m.score2}" onchange="app.setScore(${m.id}, 2, this.value)">
+            <button class="btn-small btn-secondary" onclick="app.updateScore(${m.id}, 2, -1)">-</button>
+            <button class="btn-small btn-danger mt-2" style="margin-top:8px;" onclick="app.addFoul(${m.id}, 2)">⚠️ Fallo (${m.foul2 || 0})</button>
+          </div>
         </div>
+        <p class="text-secondary text-center mb-4" style="font-size:0.8rem">Il tasto Fallo aggiunge 1 punto all'avversario</p>
         <button class="${m.played ? 'btn-secondary' : ''}" 
-                onclick="app.saveMatch(${m.id}, parseInt(document.getElementById('s1_${m.id}').value)||0, parseInt(document.getElementById('s2_${m.id}').value)||0)">
+                onclick="app.saveMatch(${m.id})">
           ${m.played ? 'Modifica Risultato' : 'Salva Risultato'}
         </button>
       </div>
-    `}).join('');
+    `;
+  }
+
+  setScore(matchId, playerIndex, val) {
+    const m = this.state.matches.find(x => x.id === matchId);
+    if (m) {
+      if (playerIndex === 1) m.score1 = parseInt(val) || 0;
+      else m.score2 = parseInt(val) || 0;
+      this.saveState();
+    }
+  }
+
+  updateScore(matchId, playerIndex, delta) {
+    const m = this.state.matches.find(x => x.id === matchId);
+    if (m) {
+      if (playerIndex === 1) m.score1 = Math.max(0, (m.score1 || 0) + delta);
+      else m.score2 = Math.max(0, (m.score2 || 0) + delta);
+      this.saveState();
+      this.renderMatches();
+    }
+  }
+
+  addFoul(matchId, playerIndex) {
+    const m = this.state.matches.find(x => x.id === matchId);
+    if (m) {
+      if (playerIndex === 1) {
+        m.foul1 = (m.foul1 || 0) + 1;
+        m.score2 = (m.score2 || 0) + 1;
+      } else {
+        m.foul2 = (m.foul2 || 0) + 1;
+        m.score1 = (m.score1 || 0) + 1;
+      }
+      this.saveState();
+      this.renderMatches();
+    }
   }
 
   renderStandings() {
@@ -668,26 +770,54 @@ class App {
       return;
     }
 
-    // Calc stats
-    let totalWins = {};
-    let tournamentWins = {};
+    // Calc global stats per player
+    const globalStats = {};
+    
     this.state.history.forEach(t => {
-      const winner = t.standings[0].name;
-      tournamentWins[winner] = (tournamentWins[winner] || 0) + 1;
-      
       t.standings.forEach(s => {
-        totalWins[s.name] = (totalWins[s.name] || 0) + s.wins;
+        if (!globalStats[s.name]) {
+          globalStats[s.name] = { played: 0, wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, fouls: 0 };
+        }
+        globalStats[s.name].played += s.played || 0;
+        globalStats[s.name].wins += s.wins || 0;
+        globalStats[s.name].losses += s.losses || 0;
+        globalStats[s.name].pointsFor += s.pointsFor || 0;
+        globalStats[s.name].pointsAgainst += s.pointsAgainst || 0;
+        globalStats[s.name].fouls += s.fouls || 0;
       });
     });
 
-    const bestWinner = Object.keys(tournamentWins).sort((a,b)=>tournamentWins[b]-tournamentWins[a])[0];
-    const bestMatches = Object.keys(totalWins).sort((a,b)=>totalWins[b]-totalWins[a])[0];
+    const playerRows = Object.keys(globalStats).sort((a,b) => globalStats[b].wins - globalStats[a].wins).map(name => {
+      const st = globalStats[name];
+      const winRate = st.played > 0 ? Math.round((st.wins / st.played) * 100) : 0;
+      const lossRate = st.played > 0 ? Math.round((st.losses / st.played) * 100) : 0;
+      const totalPoints = st.pointsFor + st.pointsAgainst;
+      const pfRate = totalPoints > 0 ? Math.round((st.pointsFor / totalPoints) * 100) : 0;
+      const psRate = totalPoints > 0 ? Math.round((st.pointsAgainst / totalPoints) * 100) : 0;
+      const foulRate = totalPoints > 0 ? Math.round((st.fouls / totalPoints) * 100) : 0;
+      
+      return `
+        <tr>
+          <td style="text-align:left"><strong>${name}</strong></td>
+          <td>${st.played}</td>
+          <td>${st.wins} <span class="text-secondary" style="font-size:0.75rem">(${winRate}%)</span></td>
+          <td>${st.losses} <span class="text-secondary" style="font-size:0.75rem">(${lossRate}%)</span></td>
+          <td>${st.pointsFor} <span class="text-secondary" style="font-size:0.75rem">(${pfRate}%)</span></td>
+          <td>${st.pointsAgainst} <span class="text-secondary" style="font-size:0.75rem">(${psRate}%)</span></td>
+          <td>${st.fouls} <span class="text-secondary" style="font-size:0.75rem">(${foulRate}%)</span></td>
+        </tr>
+      `;
+    }).join('');
 
     statsContainer.innerHTML = `
-      <h3 class="mb-2">Statistiche Globali</h3>
-      <p>🏅 Maggior numero di tornei vinti: <strong>${bestWinner}</strong> (${tournamentWins[bestWinner]})</p>
-      <p>🎾 Maggior numero di singole vittorie: <strong>${bestMatches}</strong> (${totalWins[bestMatches]})</p>
-      <p>📜 Tornei archiviati: <strong>${this.state.history.length}</strong></p>
+      <h3 class="mb-2">Statistiche Globali (Tutti i tempi)</h3>
+      <div style="overflow-x:auto">
+        <table style="font-size:0.85rem; min-width: 500px;">
+          <tr><th style="text-align:left">Nome</th><th>G</th><th>V (Win%)</th><th>P (Loss%)</th><th>PF (%)</th><th>PS (%)</th><th>Falli (%)</th></tr>
+          ${playerRows}
+        </table>
+      </div>
+      <p class="text-secondary mt-2" style="font-size:0.8rem">G=Giocate, V=Vittorie, P=Perse, PF=Punti Fatti, PS=Punti Subiti.<br>Le percentuali dei falli sono calcolate sul totale dei punti giocati.</p>
     `;
 
     histContainer.innerHTML = this.state.history.sort((a,b)=>b.id-a.id).map(t => {

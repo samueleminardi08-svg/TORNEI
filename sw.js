@@ -1,8 +1,9 @@
-const CACHE_NAME = 'minitennis-v1';
+const CACHE_NAME = 'minitennis-v2';
 const ASSETS = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  './tennis_bg.jpg'
 ];
 
 self.addEventListener('install', (e) => {
