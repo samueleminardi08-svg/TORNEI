@@ -88,7 +88,7 @@
       box-shadow: none;
     }
 
-    .container { padding: 24px; flex: 1; }
+    .container { padding: 24px; padding-bottom: 90px; flex: 1; }
     h2 { text-align: center; color: var(--primary-color); margin-bottom: 16px; text-transform: uppercase; }
     body.extreme-contrast h2 { color: #000; }
 
@@ -158,13 +158,19 @@
 
     .bottom-nav {
       position: fixed;
-      bottom: 0; left: 0; right: 0;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 600px;
       background: var(--surface-color);
       display: flex;
       justify-content: space-around;
       padding: 10px 0;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
       border-top: 1px solid #e5e7eb;
-      z-index: 100;
+      box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+      z-index: 1000;
     }
     .nav-item {
       background: transparent; color: var(--text-secondary); font-size: 0.8rem;
