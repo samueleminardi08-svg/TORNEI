@@ -430,6 +430,7 @@
        ========================================== -->
   <div id="view-history" class="container view hidden">
       <h2>Storico & Stats</h2>
+      <div id="chartsContainer" class="card" style="margin-bottom:24px;"></div>
       <div class="card" id="statsContainer"></div>
       <h3 style="margin:24px 0 16px;">Archivio Tornei</h3>
       <div id="historyContainer"></div>
@@ -470,6 +471,9 @@
 
     class App {
       constructor() {
+        this.chartLevel = 'C';
+        this.chartSelection = null;
+        this.chartSelection2 = null;
         this.state = this.loadState();
         this.render();
       }
@@ -642,10 +646,12 @@
       // ==========================================
       saveMatch(id) {
         const match = this.state.matches.find(m => m.id === id);
-        const s1 = match.score1;
-        const s2 = match.score2;
-        if (s1 === s2) return alert("Nessun pareggio consentito (tie-break)!");
-        if (Math.max(s1, s2) < 10) return alert("Il vincitore deve raggiungere almeno 10 punti!");
+        const s1 = match.score1 || 0;
+        const s2 = match.score2 || 0;
+        const max = Math.max(s1, s2);
+        const min = Math.min(s1, s2);
+        const isValid = (max === 10 && min <= 8) || (max > 10 && max - min === 2);
+        if (!isValid) return alert("Il punteggio vincente deve essere 10 a X (con X <= 8) oppure ai vantaggi con esattamente 2 punti di scarto (es. 11-9, 12-10).");
 
         if (match.played) {
           this.showDialog("Attenzione", `Questa partita ha già un risultato (${match.score1}-${match.score2}). Vuoi sovrascriverlo?`, () => {
@@ -756,7 +762,8 @@
               id: Date.now(),
               date: new Date().toLocaleDateString(),
               standings: this.getStandings(),
-              matchesCount: playedMatches
+              matchesCount: playedMatches,
+              matches: this.state.matches.filter(m => m.played).map(m => ({ ...m }))
             });
           }
           this.state.matches = [];
@@ -895,6 +902,13 @@
 
         const m = this.state.matches.find(x => x.id === selectedId);
 
+        const s1 = m.score1 || 0;
+        const s2 = m.score2 || 0;
+        const maxScore = Math.max(s1, s2);
+        const minScore = Math.min(s1, s2);
+        const isMatchOver = (maxScore === 10 && minScore <= 8) || (maxScore > 10 && maxScore - minScore >= 2);
+        const disableAdd = isMatchOver ? 'disabled' : '';
+
         container.innerHTML = `
       <div class="card ${!m.played ? 'next-match' : ''}">
         <div class="flex justify-between items-center mb-4" style="font-weight:bold; font-size:1.1rem">
@@ -904,17 +918,17 @@
         </div>
         <div class="flex justify-between items-center gap-2 mb-2">
           <div class="flex-col items-center gap-2">
-            <button class="btn-small" onclick="app.updateScore(${m.id}, 1, 1)">+</button>
+            <button class="btn-small" onclick="app.updateScore(${m.id}, 1, 1)" ${disableAdd}>+</button>
             <input type="number" id="s1_${m.id}" class="score-input" value="${m.score1}" onchange="app.setScore(${m.id}, 1, this.value)">
             <button class="btn-small btn-secondary" onclick="app.updateScore(${m.id}, 1, -1)">-</button>
-            <button class="btn-small btn-danger mt-2" style="margin-top:8px;" onclick="app.addFoul(${m.id}, 1)">⚠️ Fallo (${m.foul1 || 0})</button>
+            <button class="btn-small btn-danger mt-2" style="margin-top:8px;" onclick="app.addFoul(${m.id}, 1)" ${disableAdd}>⚠️  Fallo (${m.foul1 || 0})</button>
           </div>
           <span style="font-size:2rem; font-weight:bold;">-</span>
           <div class="flex-col items-center gap-2">
-            <button class="btn-small" onclick="app.updateScore(${m.id}, 2, 1)">+</button>
+            <button class="btn-small" onclick="app.updateScore(${m.id}, 2, 1)" ${disableAdd}>+</button>
             <input type="number" id="s2_${m.id}" class="score-input" value="${m.score2}" onchange="app.setScore(${m.id}, 2, this.value)">
             <button class="btn-small btn-secondary" onclick="app.updateScore(${m.id}, 2, -1)">-</button>
-            <button class="btn-small btn-danger mt-2" style="margin-top:8px;" onclick="app.addFoul(${m.id}, 2)">⚠️ Fallo (${m.foul2 || 0})</button>
+            <button class="btn-small btn-danger mt-2" style="margin-top:8px;" onclick="app.addFoul(${m.id}, 2)" ${disableAdd}>⚠️  Fallo (${m.foul2 || 0})</button>
           </div>
         </div>
         <p class="text-secondary text-center mb-4" style="font-size:0.8rem">Il tasto Fallo aggiunge 1 punto all'avversario</p>
@@ -932,6 +946,16 @@
           if (playerIndex === 1) m.score1 = Math.max(0, parseInt(val) || 0);
           else m.score2 = Math.max(0, parseInt(val) || 0);
           m.played = false; // Forza il salvataggio manuale
+          
+          const s1 = m.score1;
+          const s2 = m.score2;
+          const max = Math.max(s1, s2);
+          const min = Math.min(s1, s2);
+          if ((max === 10 && min <= 8) || (max > 10 && max - min === 2)) {
+             this.commitMatchScore(m, s1, s2);
+             return;
+          }
+
           this.saveState();
           this.renderMatches(); // Aggiorna UI
           this.renderStandings(); // Rimuove temporaneamente il match dalla classifica
@@ -944,6 +968,16 @@
           if (playerIndex === 1) m.score1 = Math.max(0, (m.score1 || 0) + delta);
           else m.score2 = Math.max(0, (m.score2 || 0) + delta);
           m.played = false;
+          
+          const s1 = m.score1;
+          const s2 = m.score2;
+          const max = Math.max(s1, s2);
+          const min = Math.min(s1, s2);
+          if ((max === 10 && min <= 8) || (max > 10 && max - min === 2)) {
+             this.commitMatchScore(m, s1, s2);
+             return;
+          }
+
           this.saveState();
           this.renderMatches();
           this.renderStandings();
@@ -961,6 +995,16 @@
             m.score1 = (m.score1 || 0) + 1;
           }
           m.played = false;
+          
+          const s1 = m.score1;
+          const s2 = m.score2;
+          const max = Math.max(s1, s2);
+          const min = Math.min(s1, s2);
+          if ((max === 10 && min <= 8) || (max > 10 && max - min === 2)) {
+             this.commitMatchScore(m, s1, s2);
+             return;
+          }
+
           this.saveState();
           this.renderMatches();
           this.renderStandings();
@@ -995,6 +1039,7 @@
       }
 
       renderHistory() {
+        this.renderCharts();
         const statsContainer = document.getElementById('statsContainer');
         const histContainer = document.getElementById('historyContainer');
 
@@ -1069,6 +1114,283 @@
         ${t.standings.length > 1 ? `<p style="font-size:0.8rem; margin-top:8px; color:#666">Podio: 2° ${t.standings[1]?.name} | 3° ${t.standings[2]?.name || ''}</p>` : ''}
       </div>
     `}).join('');
+      }
+
+      setChartLevel(level) {
+        this.chartLevel = level;
+        this.chartSelection = null;
+        this.renderCharts();
+      }
+
+      setChartSelection(selection) {
+        this.chartSelection = selection;
+        this.renderCharts();
+      }
+
+      setChartSelection2(selection) {
+        this.chartSelection2 = selection;
+        this.renderCharts();
+      }
+
+      getChartColor(index) {
+        const colors = ['#ADFF2F', '#32d74b', '#00bcd4', '#ffeb3b', '#ff9800', '#f44336', '#e91e63', '#9c27b0'];
+        return colors[index % colors.length];
+      }
+
+      createSVGChart(data, colors, labels, title, size = 160) {
+        let total = data.reduce((sum, val) => sum + val, 0);
+        if (total === 0) {
+           return `<div style="display:flex; flex-direction:column; align-items:center; margin-bottom:16px; padding:16px; background:var(--surface-color); border-radius:16px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+             <div style="font-weight:bold; margin-bottom:16px; text-align:center; font-size:1rem;">${title}</div>
+             <div class="text-center text-secondary" style="width:${size}px; height:${size}px; display:flex; align-items:center; justify-content:center; border:2px dashed #444; border-radius:50%; margin: 0 auto;">Nessun dato</div>
+           </div>`;
+        }
+
+        let svg = `<div style="position:relative; width:${size}px; height:${size}px; margin: 0 auto;">
+          <svg width="${size}" height="${size}" viewBox="-1 -1 2 2" style="transform: rotate(-90deg); display: block; overflow: visible;">
+            <style>
+              .pie-slice { transition: transform 0.2s, opacity 0.2s; cursor: pointer; }
+              .pie-slice:hover { transform: scale(1.05); opacity: 0.9; }
+            </style>`;
+        
+        let cumulativePercent = 0;
+
+        if (data.filter(v => v > 0).length === 1) {
+            const idx = data.findIndex(v => v > 0);
+            svg += `<circle cx="0" cy="0" r="1" fill="${colors[idx]}" class="pie-slice" />`;
+        } else {
+            data.forEach((value, index) => {
+                if (value === 0) return;
+                const startPercent = cumulativePercent;
+                cumulativePercent += value / total;
+                const endPercent = cumulativePercent;
+                
+                const startX = Math.cos(2 * Math.PI * startPercent);
+                const startY = Math.sin(2 * Math.PI * startPercent);
+                const endX = Math.cos(2 * Math.PI * endPercent);
+                const endY = Math.sin(2 * Math.PI * endPercent);
+                
+                const largeArcFlag = (value / total) > 0.5 ? 1 : 0;
+                svg += `<path d="M 0 0 L ${startX} ${startY} A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY} Z" fill="${colors[index]}" stroke="#1e1e1e" stroke-width="0.02" class="pie-slice" />`;
+            });
+        }
+        
+        // Inner circle for Donut effect
+        svg += `<circle cx="0" cy="0" r="0.65" fill="#1e1e1e" />`;
+        svg += `</svg>`;
+        
+        // Total text in center
+        svg += `<div style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none;">
+            <span style="font-size:1.5rem; font-weight:bold; color:var(--text-primary); line-height:1;">${total}</span>
+            <span style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:1px; margin-top:2px;">Totale</span>
+        </div></div>`;
+
+        let legend = `<div style="font-size:0.85rem; margin-top:16px; text-align:left; display:flex; flex-direction:column; gap:8px;">`;
+        data.forEach((value, index) => {
+            if (value === 0 && data.length > 2) return;
+            const pct = Math.round((value / total) * 100);
+            legend += `<div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding: 6px 12px; background: rgba(255,255,255,0.04); border-radius: 8px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="display:inline-block; width:12px; height:12px; background:${colors[index]}; border-radius:50%; box-shadow: 0 0 6px ${colors[index]}80;"></span>
+                  <span>${labels[index]}</span>
+                </div>
+                <div><strong>${value}</strong> <span style="color:var(--text-secondary); font-size:0.75rem; margin-left:4px;">(${pct}%)</span></div>
+            </div>`;
+        });
+        legend += `</div>`;
+
+        return `
+          <div style="display:flex; flex-direction:column; margin-bottom:16px; padding:20px; background:var(--surface-color); border-radius:24px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); width: 100%; max-width: 320px; box-sizing: border-box;">
+            <div style="font-weight:bold; margin-bottom:16px; text-align:center; font-size:1.05rem; letter-spacing:0.5px; color:#fff;">${title}</div>
+            ${svg}
+            ${legend}
+          </div>
+        `;
+      }
+
+      renderCharts() {
+        const container = document.getElementById('chartsContainer');
+        if (!container) return;
+
+        let html = `
+          <div class="flex gap-2 mb-4" style="flex-wrap:wrap;">
+            <button class="${this.chartLevel === 'A' ? '' : 'btn-secondary'} btn-small" onclick="app.setChartLevel('A')">Singola Partita</button>
+            <button class="${this.chartLevel === 'B' ? '' : 'btn-secondary'} btn-small" onclick="app.setChartLevel('B')">Per Giocatore</button>
+            <button class="${this.chartLevel === 'C' ? '' : 'btn-secondary'} btn-small" onclick="app.setChartLevel('C')">Aggregato Torneo</button>
+            <button class="${this.chartLevel === 'D' ? '' : 'btn-secondary'} btn-small" onclick="app.setChartLevel('D')">Globale Singolo</button>
+            <button class="${this.chartLevel === 'E' ? '' : 'btn-secondary'} btn-small" onclick="app.setChartLevel('E')">Scontro Diretto</button>
+          </div>
+        `;
+
+        let chartsHtml = '<div style="display:flex; flex-wrap:wrap; justify-content:space-around; gap:16px; align-items:flex-start;">';
+
+        if (this.chartLevel === 'A') {
+          const playedMatches = this.state.matches.filter(m => m.played);
+          if (playedMatches.length === 0) {
+            chartsHtml += `<p class="text-secondary">Nessuna partita giocata nel torneo corrente.</p>`;
+          } else {
+            if (!this.chartSelection || !playedMatches.find(m => m.id == this.chartSelection)) {
+              this.chartSelection = playedMatches[0].id;
+            }
+            html += `<select class="mb-4 p-2 w-full" style="background:var(--surface-light); color:#fff; border:1px solid #444; border-radius:8px;" onchange="app.setChartSelection(this.value)">
+              ${playedMatches.map(m => `<option value="${m.id}" ${m.id == this.chartSelection ? 'selected' : ''}>${m.player1} vs ${m.player2} (${m.score1}-${m.score2})</option>`).join('')}
+            </select>`;
+            const m = playedMatches.find(m => m.id == this.chartSelection);
+            
+            chartsHtml += this.createSVGChart([m.score1, m.score2], [this.getChartColor(0), this.getChartColor(5)], ['Fatti', 'Subiti'], `Punti: ${m.player1}`);
+            chartsHtml += this.createSVGChart([m.score2, m.score1], [this.getChartColor(0), this.getChartColor(5)], ['Fatti', 'Subiti'], `Punti: ${m.player2}`);
+            
+            const totalPoints = m.score1 + m.score2;
+            const p1Fouls = m.foul1 || 0;
+            const p2Fouls = m.foul2 || 0;
+            chartsHtml += this.createSVGChart([p1Fouls, Math.max(0, totalPoints - p1Fouls)], [this.getChartColor(4), this.getChartColor(1)], ['Falli', 'Altro'], `Falli: ${m.player1}`);
+            chartsHtml += this.createSVGChart([p2Fouls, Math.max(0, totalPoints - p2Fouls)], [this.getChartColor(4), this.getChartColor(1)], ['Falli', 'Altro'], `Falli: ${m.player2}`);
+          }
+        } else if (this.chartLevel === 'B') {
+          if (this.state.players.length === 0 || !this.state.isTournamentActive) {
+             chartsHtml += `<p class="text-secondary">Nessun torneo in corso.</p>`;
+          } else {
+            if (!this.chartSelection || !this.state.players.includes(this.chartSelection)) {
+              this.chartSelection = this.state.players[0];
+            }
+            html += `<select class="mb-4 p-2 w-full" style="background:var(--surface-light); color:#fff; border:1px solid #444; border-radius:8px;" onchange="app.setChartSelection(this.value)">
+              ${this.state.players.map(p => `<option value="${p}" ${p === this.chartSelection ? 'selected' : ''}>${p}</option>`).join('')}
+            </select>`;
+            
+            const s = this.getStandings().find(p => p.name === this.chartSelection);
+            if (s && s.played > 0) {
+               chartsHtml += this.createSVGChart([s.pointsFor, s.pointsAgainst], [this.getChartColor(0), this.getChartColor(5)], ['Fatti', 'Subiti'], 'Punti Totali');
+               const totalPoints = s.pointsFor + s.pointsAgainst;
+               chartsHtml += this.createSVGChart([s.fouls, Math.max(0, totalPoints - s.fouls)], [this.getChartColor(4), this.getChartColor(1)], ['Falli', 'Altro'], 'Falli vs Punti Giocati');
+               chartsHtml += this.createSVGChart([s.wins, s.losses], [this.getChartColor(2), this.getChartColor(6)], ['Vinte', 'Perse'], 'Partite');
+            } else {
+               chartsHtml += `<p class="text-secondary">Nessuna partita giocata per ${this.chartSelection}.</p>`;
+            }
+          }
+        } else if (this.chartLevel === 'C') {
+          if (this.state.players.length === 0 || !this.state.isTournamentActive) {
+             chartsHtml += `<p class="text-secondary">Nessun torneo in corso.</p>`;
+          } else {
+             const standings = this.getStandings();
+             if (standings.some(s => s.played > 0)) {
+               const winsData = standings.map(s => s.wins);
+               const pointsData = standings.map(s => s.pointsFor);
+               const colors = standings.map((s, i) => this.getChartColor(i));
+               const labels = standings.map(s => s.name);
+               chartsHtml += this.createSVGChart(winsData, colors, labels, 'Quota Vittorie', 200);
+               chartsHtml += this.createSVGChart(pointsData, colors, labels, 'Quota Punti', 200);
+             } else {
+               chartsHtml += `<p class="text-secondary">Nessuna partita giocata nel torneo corrente.</p>`;
+             }
+          }
+        } else if (this.chartLevel === 'D') {
+            const allPlayers = new Set(this.state.players);
+            this.state.history.forEach(t => t.standings.forEach(s => allPlayers.add(s.name)));
+            const allPlayersArr = Array.from(allPlayers).sort();
+
+            if (allPlayersArr.length === 0) {
+              chartsHtml += `<p class="text-secondary">Nessuno storico disponibile.</p>`;
+            } else {
+              if (!this.chartSelection || !allPlayersArr.includes(this.chartSelection)) {
+                this.chartSelection = allPlayersArr[0];
+              }
+              html += `<select class="mb-4 p-2 w-full" style="background:var(--surface-light); color:#fff; border:1px solid #444; border-radius:8px;" onchange="app.setChartSelection(this.value)">
+                ${allPlayersArr.map(p => `<option value="${p}" ${p === this.chartSelection ? 'selected' : ''}>${p}</option>`).join('')}
+              </select>`;
+
+              let totalWins = 0, totalLosses = 0, totalPointsFor = 0, totalPointsAgainst = 0, totalFouls = 0;
+              
+              // Aggregate from current tournament
+              const currStandings = this.getStandings().find(p => p.name === this.chartSelection);
+              if (currStandings && currStandings.played > 0) {
+                  totalWins += currStandings.wins;
+                  totalLosses += currStandings.losses;
+                  totalPointsFor += currStandings.pointsFor;
+                  totalPointsAgainst += currStandings.pointsAgainst;
+                  totalFouls += currStandings.fouls;
+              }
+              // Aggregate from history
+              this.state.history.forEach(t => {
+                  const s = t.standings.find(p => p.name === this.chartSelection);
+                  if (s && s.played > 0) {
+                      totalWins += s.wins || 0;
+                      totalLosses += s.losses || 0;
+                      totalPointsFor += s.pointsFor || 0;
+                      totalPointsAgainst += s.pointsAgainst || 0;
+                      totalFouls += s.fouls || 0;
+                  }
+              });
+
+              if (totalWins + totalLosses > 0) {
+                 chartsHtml += this.createSVGChart([totalWins, totalLosses], [this.getChartColor(2), this.getChartColor(6)], ['Vinte', 'Perse'], 'Partite Globali');
+                 chartsHtml += this.createSVGChart([totalPointsFor, totalPointsAgainst], [this.getChartColor(0), this.getChartColor(5)], ['Fatti', 'Subiti'], 'Punti Globali');
+                 const totalPoints = totalPointsFor + totalPointsAgainst;
+                 chartsHtml += this.createSVGChart([totalFouls, Math.max(0, totalPoints - totalFouls)], [this.getChartColor(4), this.getChartColor(1)], ['Falli', 'Altro'], 'Falli vs Punti Giocati');
+              } else {
+                 chartsHtml += `<p class="text-secondary">Nessuna partita giocata globalmente per ${this.chartSelection}.</p>`;
+              }
+            }
+        } else if (this.chartLevel === 'E') {
+            const allPlayers = new Set(this.state.players);
+            this.state.history.forEach(t => t.standings.forEach(s => allPlayers.add(s.name)));
+            const allPlayersArr = Array.from(allPlayers).sort();
+
+            if (allPlayersArr.length < 2) {
+              chartsHtml += `<p class="text-secondary">Giocatori insufficienti per uno scontro diretto.</p>`;
+            } else {
+              if (!this.chartSelection || !allPlayersArr.includes(this.chartSelection)) {
+                this.chartSelection = allPlayersArr[0];
+              }
+              if (!this.chartSelection2 || !allPlayersArr.includes(this.chartSelection2) || this.chartSelection === this.chartSelection2) {
+                this.chartSelection2 = allPlayersArr.find(p => p !== this.chartSelection) || allPlayersArr[1];
+              }
+              
+              html += `<div class="flex gap-2 w-full mb-4">
+                <select class="p-2 w-full" style="background:var(--surface-light); color:#fff; border:1px solid #444; border-radius:8px;" onchange="app.setChartSelection(this.value)">
+                  ${allPlayersArr.map(p => `<option value="${p}" ${p === this.chartSelection ? 'selected' : ''}>${p}</option>`).join('')}
+                </select>
+                <select class="p-2 w-full" style="background:var(--surface-light); color:#fff; border:1px solid #444; border-radius:8px;" onchange="app.setChartSelection2(this.value)">
+                  ${allPlayersArr.map(p => `<option value="${p}" ${p === this.chartSelection2 ? 'selected' : ''} ${p === this.chartSelection ? 'disabled' : ''}>${p}</option>`).join('')}
+                </select>
+              </div>`;
+
+              let matches = [];
+              if (this.state.isTournamentActive) matches.push(...this.state.matches.filter(m => m.played));
+              this.state.history.forEach(t => {
+                if (t.matches) matches.push(...t.matches);
+              });
+
+              let winsX = 0, winsY = 0;
+              let pointsX = 0, pointsY = 0;
+              let foulsX = 0, foulsY = 0;
+              let count = 0;
+
+              matches.forEach(m => {
+                 if (m.player1 === this.chartSelection && m.player2 === this.chartSelection2) {
+                    count++;
+                    pointsX += m.score1; pointsY += m.score2;
+                    foulsX += m.foul1 || 0; foulsY += m.foul2 || 0;
+                    if (m.score1 > m.score2) winsX++; else if (m.score2 > m.score1) winsY++;
+                 } else if (m.player2 === this.chartSelection && m.player1 === this.chartSelection2) {
+                    count++;
+                    pointsX += m.score2; pointsY += m.score1;
+                    foulsX += m.foul2 || 0; foulsY += m.foul1 || 0;
+                    if (m.score2 > m.score1) winsX++; else if (m.score1 > m.score2) winsY++;
+                 }
+              });
+
+              if (count > 0) {
+                 chartsHtml += this.createSVGChart([winsX, winsY], [this.getChartColor(0), this.getChartColor(5)], [this.chartSelection, this.chartSelection2], 'Vittorie Scontro Diretto');
+                 chartsHtml += this.createSVGChart([pointsX, pointsY], [this.getChartColor(0), this.getChartColor(5)], [this.chartSelection, this.chartSelection2], 'Punti Scontro Diretto');
+                 chartsHtml += this.createSVGChart([foulsX, foulsY], [this.getChartColor(4), this.getChartColor(6)], [this.chartSelection, this.chartSelection2], 'Falli Scontro Diretto');
+              } else {
+                 chartsHtml += `<p class="text-secondary text-center w-full mt-4" style="font-size:1.1rem;">Nessuno scontro diretto trovato tra questi due giocatori nei tornei disponibili.</p>`;
+              }
+            }
+        }
+
+        chartsHtml += '</div>';
+        container.innerHTML = html + chartsHtml;
       }
     }
 
