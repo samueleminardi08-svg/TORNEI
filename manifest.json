@@ -1,6 +1,6 @@
 {
-  "name": "Mini Tennis Tourney",
-  "short_name": "MiniTennis",
+  "name": "TORNEI",
+  "short_name": "TORNEI",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#121212",
